@@ -28,7 +28,6 @@ def createParser():
 	return parser
 
 def checkAkk(cookie):
-	a = 0
 	try:
 		f = urlopen(Request('https://csgo500.com/', headers={'User-Agent': 'Mozilla/5.0', 'Cookie': 'express.sid=' + cookie }))
 	except urllib.error.HTTPError:

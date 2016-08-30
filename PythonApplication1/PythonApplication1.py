@@ -17,7 +17,7 @@ class CookieList:
 
 path = os.path.expanduser("~/festeloApp/")
  
-def createParser():
+def createParser(): #Настройка аргументов
 	parser = argparse.ArgumentParser()
 	parser.add_argument('-n', '--new', nargs='+', help="Добавляет новый Cookie в базу данных")
 	parser.add_argument('-r', '--run', nargs=1, help="Запускает вручную скрипт для выбранного Cookie")
@@ -27,20 +27,22 @@ def createParser():
 
 	return parser
 
-def checkAkk(cookie):
+def checkAkk(cookie): #Проверка Cookie аккаунта / получение данных об аккаунте 
 	try:
+		#Открытие CSGO500 для получения данных об аккаунте
 		f = urlopen(Request('https://csgo500.com/', headers={'User-Agent': 'Mozilla/5.0', 'Cookie': 'express.sid=' + cookie }))
 	except urllib.error.HTTPError:
-		print("курлык")
+		print("Ошибка соединения")
 		return 1
-	result = f.read().decode('utf-8')
+	result = f.read().decode('utf-8') # Записывание кода HTML страницы в переменную
 	try:
+		# Ищет на странице данные и записывает в переменные
 		rewDate = re.findall('rewardDate = "(.*?) GMT', result)[0]
 		nick = re.findall('<div id="account-username">\n(.*?)\n</div>', result)[0]
 		balance = re.findall('value = (.*?);', result)[0]
-		return [nick, balance, rewDate]
-		#return  "Nick: {} | Balance: {} | Reward Date: {} UTC".format(nick, balance, rewDate) ]
+		return [nick, balance, rewDate] # Возвращает массив с полученными данными
 	except IndexError:
+		#Происходит если какие-то данные на странице не обнаружены.
 		print("Ошибка авторизации, данные указаны верно?")
 		return 2
 
@@ -48,69 +50,57 @@ def test(cookie, i):
 	print("Send request on CSGO500, cookie: " + cookie)
 	headers = {'User-agent': 'Mozilla/5.0', 'Cookie': 'express.sid=' + cookie}
 	try:
-		f = urlopen(Request('https://csgo500.com/', headers=headers))
-		res = f.read().decode("UTF-8")
+		f = urlopen(Request('https://csgo500.com/', headers=headers)) #Открывает страницу для получения HTML
+		res = f.read().decode("UTF-8") #Записывает данные в переменную
 	except urllib.error.HTTPError:
 		print("Error with access to site! Check internet connection!")
 		## ДЛЯ УБУНТЫ РАЗКОММЕНТИРОВАТЬ!!!
 		#s.call(['notify-send','Ошибка доступа к сайту CSGO500.com. Проверьте интернет-соединение!','FesteloBot'])
 		return 0
-	token = re.findall('csrfToken = "(.*?)";', res)
- 
-	app_xml = parse(path + "/data.xml")
-	element = app_xml.childNodes[0].getElementsByTagName('Cookie')[i]
-	if '<div id="login-content">' in res:
+	token = re.findall('csrfToken = "(.*?)";', res) #Ищет CSRF токен на странице и записывает в переменную
+	app_xml = parse(path + "/data.xml") #Открывает XML документ для чтения
+	element = app_xml.childNodes[0].getElementsByTagName('Cookie')[i] #Находит нужный элемент Cookie по индексу i
+	if '<div id="login-content">' in res: #Происходит если на странице есть кнопка входа
 		print("Login error! Cookie #" + str(i))
 		## ДЛЯ УБУНТЫ РАЗКОММЕНТИРОВАТЬ!!!
 		#s.call(['notify-send','Ошибка в авторизации при отправлении запроса на CSGO500.com. Cookie #' + str(i),'FesteloBot'])
 		element.tagName = "OUTDATE"
 	else:
-		requestdata = {'_csrf' : token[0]}
-		params_auth = urllib.parse.urlencode(requestdata)
+		requestdata = {'_csrf' : token[0]} #Формирует csrf данные для POST запроса
+		params_auth = urllib.parse.urlencode(requestdata) 
 		try:
+			#Отправляет POST запрос для получения ежедневного бонуса
 			data = urlopen(Request('https://csgo500.com/reward', data=params_auth.encode("UTF-8"), headers=headers))
 		#r = requests.post('https://csgo500.com/reward/',requestdata,
 		#headers=headers)
-		except urllib.HTTPError:
+		except urllib.HTTPError: #Происходит когда 1) Нет соединения. 2) Сервер отвечает кодом ошибки
 			## ДЛЯ УБУНТЫ РАЗКОММЕНТИРОВАТЬ!!!
 			#s.call(['notify-send','Ошибка запроса или время ежедневного бонуса еще не пришло. Cookie #' + str(i),'FesteloBot'])
 			print("The daily bonus has not yet come. Cookie #" + str(i))
 			return 0
 		#print r.cookies['']
-		element.removeAttribute("time")
+		element.removeAttribute("time") #Обновляет данные времени ежедневного бонуса в XML документе
 		element.setAttribute("time", str(time.time()))
 		## ДЛЯ УБУНТЫ РАЗКОММЕНТИРОВАТЬ!!!
 		#s.call(['notify-send','Запрос на CSGO500.com отправлен успешно. Cookie #' + str(i),'FesteloBot'])
 		print("Task complete succesful! Cookie # " + str(i))
-	f.close()
-	res = open(path + "/data.xml", "w")
-	app_xml.childNodes[0].writexml(res)
-	res.close()
+	res = open(path + "/data.xml", "w") #Открывает XML документ для записи
+	app_xml.childNodes[0].writexml(res) #Записывает в него обновленные данные
+	res.close() #Закрывает XML документ
 
-def refrCookieList():
+def refrCookieList(mode = 0):
 	try:
-		dom = parse(path + "/data.xml")
+		dom = parse(path + "/data.xml") #Открывает для чтения XML документ
 		custom = []
 		i = 0
-		for node in dom.childNodes[0].getElementsByTagName('Cookie'):  # visit every node <bar />
-			custom.append(CookieList())
+		if mode == 0: ElementName = 'Cookie'
+		else: ElementName = 'OUTDATE'
+		# Цикл для каждого элемента в XML документе с именем Cookie или OUTDATE
+		for node in dom.childNodes[0].getElementsByTagName(ElementName):
+			custom.append(CookieList()) #Добавляет к массиву новый объект CookieList и заполняет его
 			custom[i].time = node.getAttribute("time")
 			custom[i].value = node.firstChild.nodeValue
-			i = i + 1
-		return custom
-	except IOError:
-		DataMake()
-
-def refrOutDate():
-	try:
-		dom = parse(path + "/data.xml")
-		custom = []
-		i = 0
-		for node in dom.childNodes[0].getElementsByTagName('OUTDATE'):  # visit every node <bar />
-			custom.append(CookieList())
-			custom[i].time = node.getAttribute("time")
-			custom[i].value = node.firstChild.nodeValue
-			i = i + 1
+			i = i + 1 #Счетчик
 		return custom
 	except IOError:
 		DataMake()
@@ -118,9 +108,9 @@ def refrOutDate():
 def DataMake():
 	print("Первый запуск. Подготовка файлов...")
 	try:
-		os.makedirs(path)
-		f = open(path + "/data.xml", 'w')
-		f.write("<data/>")
+		os.makedirs(path) #Создает рабочую директорию
+		f = open(path + "/data.xml", 'w') #Создает и открывает документ XML
+		f.write("<data/>") #Записывает в него XML тег и закрывает его и файл
 		f.close
 		print("Файлы созданы, добавьте cookie командой 'febot -n COOKIE''")
 		exit(0)
@@ -128,23 +118,22 @@ def DataMake():
 		print("Ошибка при создании файлов, путь: " + path)
 		exit(0)
 
-def go():
-	print("НАЧАЛОСЬ")
-	custom = refrCookieList()
-	i = 0
-	for s in custom:
+def go():  #Таймер проверки надобности отправления запроса на ежедневный бонус
+	custom = refrCookieList() #Обновляет данные с XML документа
+	i = 0 #Счетчик
+	for s in custom: #Проверка каждого элемента
 		if float(s.time) > 0 and time.time() >= float(s.time) + 86400:  
 			test(s.value, i)
 		i = i + 1
-	threading.Timer(60.0, go).start()
+	threading.Timer(60.0, go).start() #Новый старт таймера
 
 
 
 #������ ���������: ������ ����������
-namespace = createParser().parse_args(sys.argv[1:])
-checkArgs = 0
+namespace = createParser().parse_args(sys.argv[1:]) #Парсер аргументов
+checkArgs = False
 if namespace.new != None: 
-	checkArgs = 1
+	checkArgs = True
 	try:
 		print("\nПроцесс может занять некоторое время, в зависимости от скорости вашего интернет-соединения\n")
 		okda = True
@@ -181,7 +170,7 @@ if namespace.new != None:
 		DataMake()
 
 if namespace.run != None:
-	checkArgs = 1
+	checkArgs = True
 	custom = refrCookieList()
 	if int(namespace.run[0]) >= len(custom) or int(namespace.run[0]) < 0:
 		print("Ашибка")
@@ -189,7 +178,7 @@ if namespace.run != None:
 		test(custom[int(namespace.run[0])].value, int(namespace.run[0]))
 
 if namespace.info != None:
-	checkArgs = 1
+	checkArgs = True
 	custom = refrCookieList()
 	i = int(namespace.info[0])
 	if i >= len(custom) or i < 0:
@@ -200,10 +189,10 @@ if namespace.info != None:
 			print(namespace.info[0] + ": Nick: {} | Balance: {} | Reward Date: {} UTC".format(a[0], a[1], a[2]))
 
 if namespace.remove != None:
-	checkArgs = 1
+	checkArgs = True
 	dom = parse(path + "/data.xml")
 	custom = refrCookieList()
-	outdate = refrOutDate()
+	outdate = refrCookieList(1)
 	if int(namespace.remove[0]) >= len(custom) + len(outdate) or int(namespace.remove[0]) < 0:
 		print("Ашибка")
 		exit(0)
@@ -217,14 +206,14 @@ if namespace.remove != None:
 		res.close()
 
 if namespace.list:
-	checkArgs = 1
+	checkArgs = True
 	custom = refrCookieList()
 	i = 0
 	for s in custom:
 		date = time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(float(custom[i].time)))
 		print("\n{}: Recent action: {} UTC\nValue: {}".format(i, date, custom[i].value))
 		i = i + 1
-	outdate = refrOutDate()
+	outdate = refrCookieList(1)
 	for s in outdate:
 		date = time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(float(outdate[i - len(custom)].time)))
 		print("\n{}: OUTDATE!! Recent action: {}(sste)\nValue: {}".format(i, date, outdate[i - len(custom)].value))
@@ -232,5 +221,5 @@ if namespace.list:
 #�����
 #path = "/home/" + os.getlogin() + "/festeloApp/"
 #test()
-if checkArgs == 0:
+if not checkArgs:
 	go()

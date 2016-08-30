@@ -14,7 +14,7 @@
     <RootNamespace>PythonApplication1</RootNamespace>
     <IsWindowsApplication>False</IsWindowsApplication>
     <LaunchProvider>Standard Python launcher</LaunchProvider>
-    <CommandLineArguments>-n s%3A1355ca78-83ee-4f9e-af68-a10c7c186098.xAPqk6rwdbdJHJEhQYWuNHgq1B0fECTgpqcifNSw9OU</CommandLineArguments>
+    <CommandLineArguments>-ls</CommandLineArguments>
     <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">

@@ -7,6 +7,8 @@ import threading
 import sys
 import time
 import re
+import logging
+import atexit
 from urllib.request import Request, urlopen
 import urllib.error
 from xml.dom.minidom import parse
@@ -16,7 +18,10 @@ class CookieList:
 	value = ""
 
 path = os.path.expanduser("~/festeloApp/")
- 
+
+def exit_handler():
+	logging.info('Script closing')
+
 def createParser(): #Настройка аргументов
 	parser = argparse.ArgumentParser()
 	parser.add_argument('-n', '--new', nargs='+', help="Добавляет новый Cookie в базу данных")
@@ -47,23 +52,20 @@ def checkAkk(cookie): #Проверка Cookie аккаунта / получен
 		return 2
 
 def test(cookie, i):
-	print("Send request on CSGO500, cookie: " + cookie)
+	informing("Send request to CSGO500. Cookie#" + str(i), cookie, False)
 	headers = {'User-agent': 'Mozilla/5.0', 'Cookie': 'express.sid=' + cookie}
 	try:
 		f = urlopen(Request('https://csgo500.com/', headers=headers)) #Открывает страницу для получения HTML
 		res = f.read().decode("UTF-8") #Записывает данные в переменную
 	except urllib.error.HTTPError:
-		print("Error with access to site! Check internet connection!")
-		## ДЛЯ УБУНТЫ РАЗКОММЕНТИРОВАТЬ!!!
-		#s.call(['notify-send','Ошибка доступа к сайту CSGO500.com. Проверьте интернет-соединение!','FesteloBot'])
+		informing("Error with access to site! Check internet connection!", True)
 		return 0
 	token = re.findall('csrfToken = "(.*?)";', res) #Ищет CSRF токен на странице и записывает в переменную
 	app_xml = parse(path + "/data.xml") #Открывает XML документ для чтения
 	element = app_xml.childNodes[0].getElementsByTagName('Cookie')[i] #Находит нужный элемент Cookie по индексу i
+
 	if '<div id="login-content">' in res: #Происходит если на странице есть кнопка входа
-		print("Login error! Cookie #" + str(i))
-		## ДЛЯ УБУНТЫ РАЗКОММЕНТИРОВАТЬ!!!
-		#s.call(['notify-send','Ошибка в авторизации при отправлении запроса на CSGO500.com. Cookie #' + str(i),'FesteloBot'])
+		informing("Login error! Cookie #" + str(i), cookie, True)
 		element.tagName = "OUTDATE"
 	else:
 		requestdata = {'_csrf' : token[0]} #Формирует csrf данные для POST запроса
@@ -71,19 +73,13 @@ def test(cookie, i):
 		try:
 			#Отправляет POST запрос для получения ежедневного бонуса
 			data = urlopen(Request('https://csgo500.com/reward', data=params_auth.encode("UTF-8"), headers=headers))
-		#r = requests.post('https://csgo500.com/reward/',requestdata,
-		#headers=headers)
+
 		except urllib.HTTPError: #Происходит когда 1) Нет соединения. 2) Сервер отвечает кодом ошибки
-			## ДЛЯ УБУНТЫ РАЗКОММЕНТИРОВАТЬ!!!
-			#s.call(['notify-send','Ошибка запроса или время ежедневного бонуса еще не пришло. Cookie #' + str(i),'FesteloBot'])
-			print("The daily bonus has not yet come. Cookie #" + str(i))
+			informing("The daily bonus has not yet come. Cookie #" + str(i), cookie, True)
 			return 0
-		#print r.cookies['']
 		element.removeAttribute("time") #Обновляет данные времени ежедневного бонуса в XML документе
 		element.setAttribute("time", str(time.time()))
-		## ДЛЯ УБУНТЫ РАЗКОММЕНТИРОВАТЬ!!!
-		#s.call(['notify-send','Запрос на CSGO500.com отправлен успешно. Cookie #' + str(i),'FesteloBot'])
-		print("Task complete succesful! Cookie # " + str(i))
+		informing("Task complete succesful! Cookie # " + str(i), cookie, False)
 	res = open(path + "/data.xml", "w") #Открывает XML документ для записи
 	app_xml.childNodes[0].writexml(res) #Записывает в него обновленные данные
 	res.close() #Закрывает XML документ
@@ -127,11 +123,25 @@ def go():  #Таймер проверки надобности отправле�
 		i = i + 1
 	threading.Timer(60.0, go).start() #Новый старт таймера
 
-
+def informing(msg , addition = "", error = False):
+	if not error:
+		logging.info(msg + addition)
+	else:
+		logging.error(msg + addition)
+	if(sys.platform == 'linux'):
+		s.call(['notify-send', msg,'FesteloBot'])
+	print(msg + addition)
 
 #������ ���������: ������ ����������
+atexit.register(exit_handler)
 namespace = createParser().parse_args(sys.argv[1:]) #Парсер аргументов
 checkArgs = False
+logging.basicConfig(format = u'%(filename)s# %(levelname)-8s [%(asctime)s]  %(message)s', level = logging.DEBUG, filename = path+ "/logfile.log")
+arguments = ""
+for i in sys.argv[1:]:
+	arguments += i + " "
+logging.info( 'Script was launched. Args: ' + arguments)
+
 if namespace.new != None: 
 	checkArgs = True
 	try:
@@ -158,6 +168,7 @@ if namespace.new != None:
 				newCo.appendChild(app_xml.createTextNode(s))
 				app_xml.childNodes[0].appendChild(newCo)
 				print("Добавлен COOKIE: Nick: {} | Balance: {} | Reward Date: {} UTC".format(data[i][0], data[i][1], data[i][2])) 
+				logging.info( u'Cookie ' +  s + 'was added #' + i)
 				i = i + 1
 			res = open(path + "/data.xml", "w")
 			app_xml.childNodes[0].writexml(res)
@@ -176,6 +187,7 @@ if namespace.run != None:
 		print("Ашибка")
 	else:
 		test(custom[int(namespace.run[0])].value, int(namespace.run[0]))
+		logging.info( u'Cookie ' +  int(namespace.run[0]) + 'run manually')
 
 if namespace.info != None:
 	checkArgs = True
@@ -201,6 +213,7 @@ if namespace.remove != None:
 			dom.childNodes[0].removeChild(dom.childNodes[0].getElementsByTagName('OUTDATE')[int(namespace.remove[0]) - len(custom)])
 		else:
 			dom.childNodes[0].removeChild(dom.childNodes[0].getElementsByTagName('Cookie')[int(namespace.remove[0])])
+		logging.info( u'Cookie ' +  int(namespace.remove[0]) + 'was removed')
 		res = open(path + "/data.xml", "w")
 		dom.childNodes[0].writexml(res)
 		res.close()
@@ -222,4 +235,5 @@ if namespace.list:
 #path = "/home/" + os.getlogin() + "/festeloApp/"
 #test()
 if not checkArgs:
+	logging.info( u'Script starting')
 	go()
